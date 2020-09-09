@@ -10,6 +10,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/jinzhu/gorm v1.9.16
 	github.com/joho/godotenv v1.3.0
+	github.com/minio/minio-go/v6 v6.0.50
 	github.com/myesui/uuid v1.0.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/twinj/uuid v1.0.0

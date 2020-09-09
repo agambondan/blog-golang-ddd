@@ -10,6 +10,7 @@ import (
 
 type Repositories struct {
 	User repositories.UserRepository
+	Post repositories.PostRepository
 	db   *gorm.DB
 }
 

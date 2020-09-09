@@ -4,6 +4,7 @@ import (
 	"Repository-Pattern/infrastructure/auth"
 	"Repository-Pattern/infrastructure/persistence"
 	"Repository-Pattern/interfaces"
+	"Repository-Pattern/interfaces/fileupload"
 	"Repository-Pattern/interfaces/middlewares"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -46,8 +47,10 @@ func main() {
 	}
 
 	tk := auth.NewToken()
+	fd := fileupload.NewFileUpload()
 
 	users := interfaces.NewUsers(services.User, redisService.Auth, tk)
+	posts := interfaces.NewPost(services.Post, services.User, fd, redisService.Auth, tk)
 	authenticate := interfaces.NewAuthenticate(services.User, redisService.Auth, tk)
 
 	r := gin.Default()
@@ -57,6 +60,13 @@ func main() {
 	r.POST("/users", users.SaveUser)
 	r.GET("/users", users.GetUsers)
 	r.GET("/users/:user_id", users.GetUser)
+
+	//post routes
+	r.POST("/post", middlewares.AuthMiddleware(), middlewares.MaxSizeAllowed(8192000), posts.SavePost)
+	r.PUT("/post/:post_id", middlewares.AuthMiddleware(), middlewares.MaxSizeAllowed(8192000), posts.UpdatePost)
+	r.GET("/post/:post_id", posts.GetPostAndCreator)
+	r.DELETE("/post/:post_id", middlewares.AuthMiddleware(), posts.DeletePost)
+	r.GET("/post", posts.GetAllPost)
 
 	//authentication routes
 	r.POST("/login", authenticate.Login)
