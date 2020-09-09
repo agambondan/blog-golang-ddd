@@ -48,6 +48,7 @@ func main() {
 	tk := auth.NewToken()
 
 	users := interfaces.NewUsers(services.User, redisService.Auth, tk)
+	authenticate := interfaces.NewAuthenticate(services.User, redisService.Auth, tk)
 
 	r := gin.Default()
 	r.Use(middlewares.CORSMiddleware()) //For CORS
@@ -56,6 +57,11 @@ func main() {
 	r.POST("/users", users.SaveUser)
 	r.GET("/users", users.GetUsers)
 	r.GET("/users/:user_id", users.GetUser)
+
+	//authentication routes
+	r.POST("/login", authenticate.Login)
+	r.POST("/logout", authenticate.Logout)
+	r.POST("/refresh", authenticate.Refresh)
 
 	//Starting the application
 	appPort := os.Getenv("PORT") //using heroku host

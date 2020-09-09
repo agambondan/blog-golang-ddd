@@ -5,6 +5,7 @@ import (
 	"Repository-Pattern/domain/repositories"
 	"Repository-Pattern/infrastructure/security"
 	"errors"
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
 	"strings"
@@ -36,9 +37,9 @@ func (r *UserRepo) SaveUser(user *model.User) (*model.User, map[string]string) {
 	return user, nil
 }
 
-func (r *UserRepo) GetUser(id uint64) (*model.User, error) {
+func (r *UserRepo) GetUser(id uuid.UUID) (*model.User, error) {
 	var user model.User
-	err := r.db.Debug().Where("id = ?", id).Take(&user).Error
+	err := r.db.Debug().Where("uuid = ?", id).Take(&user).Error
 	if err != nil {
 		return nil, err
 	}

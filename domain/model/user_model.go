@@ -3,8 +3,8 @@ package model
 import (
 	"Repository-Pattern/infrastructure/security"
 	"github.com/badoux/checkmail"
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
-	"github.com/satori/go.uuid"
 	"html"
 	"strings"
 	"time"
@@ -23,7 +23,7 @@ type User struct {
 	RoleId      int        `gorm:"not null;" json:"role_id,omitempty"`
 	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at,omitempty"`
 	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at,omitempty"`
-	DeletedAt   *time.Time `gorm:"size:100;not null;" json:"deleted_at,omitempty"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
 }
 
 type PublicUser struct {
@@ -34,8 +34,11 @@ type PublicUser struct {
 
 // BeforeCreate will set a UUID rather than numeric ID.
 func (u *User) BeforeCreate(scope *gorm.Scope) error {
-	uuidV4 := uuid.NewV4()
-	return scope.SetColumn("ID", uuidV4)
+	uuidV4, err := uuid.NewUUID()
+	if err != nil {
+		return err
+	}
+	return scope.SetColumn("uuid", uuidV4)
 }
 
 //BeforeSave is a gorm hook

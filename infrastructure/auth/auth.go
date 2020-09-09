@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v7"
-	"strconv"
+	"github.com/google/uuid"
 	"time"
 )
 
 type AuthInterface interface {
-	CreateAuth(uint64, *TokenDetails) error
-	FetchAuth(string) (uint64, error)
+	CreateAuth(uuid.UUID, *TokenDetails) error
+	FetchAuth(string) (uuid.UUID, error)
 	DeleteRefresh(string) error
 	DeleteTokens(*AccessDetails) error
 }
@@ -27,7 +27,7 @@ func NewAuth(client *redis.Client) *ClientData {
 
 type AccessDetails struct {
 	TokenUuid string
-	UserId    uint64
+	UserUUID  uuid.UUID
 }
 
 type TokenDetails struct {
@@ -40,16 +40,16 @@ type TokenDetails struct {
 }
 
 //Save token metadata to Redis
-func (tk *ClientData) CreateAuth(userid uint64, td *TokenDetails) error {
+func (tk *ClientData) CreateAuth(userid uuid.UUID, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0) //converting Unix to UTC(to Time object)
 	rt := time.Unix(td.RtExpires, 0)
 	now := time.Now()
 
-	atCreated, err := tk.client.Set(td.TokenUuid, strconv.Itoa(int(userid)), at.Sub(now)).Result()
+	atCreated, err := tk.client.Set(td.TokenUuid, userid.String(), at.Sub(now)).Result()
 	if err != nil {
 		return err
 	}
-	rtCreated, err := tk.client.Set(td.RefreshUuid, strconv.Itoa(int(userid)), rt.Sub(now)).Result()
+	rtCreated, err := tk.client.Set(td.RefreshUuid, userid.String(), rt.Sub(now)).Result()
 	if err != nil {
 		return err
 	}
@@ -60,19 +60,19 @@ func (tk *ClientData) CreateAuth(userid uint64, td *TokenDetails) error {
 }
 
 //Check the metadata saved
-func (tk *ClientData) FetchAuth(tokenUuid string) (uint64, error) {
+func (tk *ClientData) FetchAuth(tokenUuid string) (uuid.UUID, error) {
 	userid, err := tk.client.Get(tokenUuid).Result()
+	userUUID, err := uuid.Parse(userid)
 	if err != nil {
-		return 0, err
+		return userUUID, err
 	}
-	userID, _ := strconv.ParseUint(userid, 10, 64)
-	return userID, nil
+	return userUUID, nil
 }
 
 //Once a user row in the token table
 func (tk *ClientData) DeleteTokens(authD *AccessDetails) error {
 	//get the refresh uuid
-	refreshUuid := fmt.Sprintf("%s++%d", authD.TokenUuid, authD.UserId)
+	refreshUuid := fmt.Sprintf("%s++%d", authD.TokenUuid, authD.UserUUID)
 	//delete access token
 	deletedAt, err := tk.client.Del(authD.TokenUuid).Result()
 	if err != nil {

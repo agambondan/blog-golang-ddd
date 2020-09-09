@@ -5,8 +5,8 @@ import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/infrastructure/auth"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"net/http"
-	"strconv"
 )
 
 //Users struct defines the dependencies that will be used
@@ -60,12 +60,14 @@ func (s *Users) GetUsers(c *gin.Context) {
 }
 
 func (s *Users) GetUser(c *gin.Context) {
-	userId, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
+	uuidParam := c.Param("user_id")
+	userUUID, err := uuid.Parse(uuidParam)
+	//userId, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	user, err := s.us.GetUser(userId)
+	user, err := s.us.GetUser(userUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

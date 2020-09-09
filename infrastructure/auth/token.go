@@ -3,14 +3,12 @@ package auth
 import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/twinj/uuid"
+	"github.com/google/uuid"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
-
 
 type Token struct{}
 
@@ -19,27 +17,28 @@ func NewToken() *Token {
 }
 
 type TokenInterface interface {
-	CreateToken(userid uint64) (*TokenDetails, error)
+	CreateToken(userUUID uuid.UUID) (*TokenDetails, error)
 	ExtractTokenMetadata(*http.Request) (*AccessDetails, error)
 }
 
 //Token implements the TokenInterface
 var _ TokenInterface = &Token{}
 
-func (t *Token) CreateToken(userid uint64) (*TokenDetails, error) {
+func (t *Token) CreateToken(userUUID uuid.UUID) (*TokenDetails, error) {
 	td := &TokenDetails{}
 	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
-	td.TokenUuid = uuid.NewV4().String()
+	newUUID, _ := uuid.NewUUID()
+	td.TokenUuid = newUUID.String()
 
 	td.RtExpires = time.Now().Add(time.Hour * 24 * 7).Unix()
-	td.RefreshUuid = td.TokenUuid + "++" + strconv.Itoa(int(userid))
+	td.RefreshUuid = td.TokenUuid + "++" + userUUID.String()
 
 	var err error
 	//Creating Access Token
 	atClaims := jwt.MapClaims{}
 	atClaims["authorized"] = true
 	atClaims["access_uuid"] = td.TokenUuid
-	atClaims["user_id"] = userid
+	atClaims["user_id"] = userUUID
 	atClaims["exp"] = td.AtExpires
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
 	td.AccessToken, err = at.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
@@ -49,7 +48,7 @@ func (t *Token) CreateToken(userid uint64) (*TokenDetails, error) {
 	//Creating Refresh Token
 	rtClaims := jwt.MapClaims{}
 	rtClaims["refresh_uuid"] = td.RefreshUuid
-	rtClaims["user_id"] = userid
+	rtClaims["user_id"] = userUUID
 	rtClaims["exp"] = td.RtExpires
 	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
 	td.RefreshToken, err = rt.SignedString([]byte(os.Getenv("REFRESH_SECRET")))
@@ -107,13 +106,15 @@ func (t *Token) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 		if !ok {
 			return nil, err
 		}
-		userId, err := strconv.ParseUint(fmt.Sprintf("%.f", claims["user_id"]), 10, 64)
+		userId := fmt.Sprintf("%.f", claims["user_id"])
+		userUUID, err := uuid.Parse(userId)
+		//userUUID, err := strconv.ParseUint(fmt.Sprintf("%.f", claims["user_id"]), 10, 64)
 		if err != nil {
 			return nil, err
 		}
 		return &AccessDetails{
 			TokenUuid: accessUuid,
-			UserId:    userId,
+			UserUUID:  userUUID,
 		}, nil
 	}
 	return nil, err

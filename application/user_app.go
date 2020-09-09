@@ -3,6 +3,7 @@ package application
 import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/domain/repositories"
+	"github.com/google/uuid"
 )
 
 type userApp struct {
@@ -15,7 +16,7 @@ var _ UserAppInterface = &userApp{}
 type UserAppInterface interface {
 	SaveUser(*model.User) (*model.User, map[string]string)
 	GetUsers() ([]model.User, error)
-	GetUser(uint64) (*model.User, error)
+	GetUser(uuid uuid.UUID) (*model.User, error)
 	GetUserByEmailAndPassword(*model.User) (*model.User, map[string]string)
 }
 
@@ -23,7 +24,7 @@ func (u *userApp) SaveUser(user *model.User) (*model.User, map[string]string) {
 	return u.us.SaveUser(user)
 }
 
-func (u *userApp) GetUser(userId uint64) (*model.User, error) {
+func (u *userApp) GetUser(userId uuid.UUID) (*model.User, error) {
 	return u.us.GetUser(userId)
 }
 
