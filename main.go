@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"log"
+	"net/http"
 	"os"
 )
 
@@ -49,17 +50,28 @@ func main() {
 	tk := auth.NewToken()
 	fd := fileupload.NewFileUpload()
 
-	users := interfaces.NewUsers(services.User, redisService.Auth, tk)
+	users := interfaces.NewUsers(services.User, services.Post, services.Role, redisService.Auth, tk)
 	posts := interfaces.NewPost(services.Post, services.User, fd, redisService.Auth, tk)
+	roles := interfaces.NewRole(services.Role, services.User, redisService.Auth, tk)
 	authenticate := interfaces.NewAuthenticate(services.User, redisService.Auth, tk)
 
 	r := gin.Default()
 	r.Use(middlewares.CORSMiddleware()) //For CORS
 
+	// home routes
+	r.GET("/", home)
+
 	//user routes
 	r.POST("/users", users.SaveUser)
 	r.GET("/users", users.GetUsers)
 	r.GET("/users/:user_id", users.GetUser)
+
+	//role routes
+	r.POST("/role", middlewares.AuthMiddleware(), roles.SaveRole)
+	r.PUT("/role/:role_id", middlewares.AuthMiddleware(), roles.UpdateRole)
+	r.GET("/role/:role_id", roles.GetRole)
+	r.DELETE("/role/:role_id", middlewares.AuthMiddleware(), roles.DeleteRole)
+	r.GET("/role", roles.GetAllRole)
 
 	//post routes
 	r.POST("/post", middlewares.AuthMiddleware(), middlewares.MaxSizeAllowed(8192000), posts.SavePost)
@@ -79,4 +91,8 @@ func main() {
 		appPort = "8888" //localhost
 	}
 	log.Fatal(r.Run(":" + appPort))
+}
+
+func home(c *gin.Context) {
+	c.JSON(http.StatusOK, "Hello World From My Office")
 }

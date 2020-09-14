@@ -4,6 +4,7 @@ import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/domain/repositories"
 	"errors"
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 	"os"
 	"strings"
@@ -20,12 +21,12 @@ func NewPostRepository(db *gorm.DB) *PostRepo {
 //PostRepo implements the repository.PostRepository interface
 var _ repositories.PostRepository = &PostRepo{}
 
-func (r *PostRepo) SavePost(Post *model.Post) (*model.Post, map[string]string) {
+func (r *PostRepo) SavePost(post *model.Post) (*model.Post, map[string]string) {
 	dbErr := map[string]string{}
 	//The images are uploaded to digital ocean spaces. So we need to prepend the url. This might not be your use case, if you are not uploading image to Digital Ocean.
-	Post.PostImage = os.Getenv("DO_SPACES_URL") + Post.PostImage
+	post.PostImage = os.Getenv("DO_SPACES_URL") + post.PostImage
 
-	err := r.db.Debug().Create(&Post).Error
+	err := r.db.Debug().Create(&post).Error
 	if err != nil {
 		//since our title is unique
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
@@ -36,7 +37,7 @@ func (r *PostRepo) SavePost(Post *model.Post) (*model.Post, map[string]string) {
 		dbErr["db_error"] = "database error"
 		return nil, dbErr
 	}
-	return Post, nil
+	return post, nil
 }
 
 func (r *PostRepo) GetPost(id uint64) (*model.Post, error) {
@@ -46,9 +47,21 @@ func (r *PostRepo) GetPost(id uint64) (*model.Post, error) {
 		return nil, errors.New("database error, please try again")
 	}
 	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("Post not found")
+		return nil, errors.New("post not found")
 	}
 	return &Post, nil
+}
+
+func (r *PostRepo) GetPostByIdUser(userUuid uuid.UUID) ([]model.Post, error) {
+	var Post []model.Post
+	err := r.db.Debug().Where("user_uuid = ?", userUuid).Find(&Post).Error
+	if err != nil {
+		return nil, errors.New("database error, please try again")
+	}
+	if gorm.IsRecordNotFoundError(err) {
+		return nil, errors.New("post not found")
+	}
+	return Post, nil
 }
 
 func (r *PostRepo) GetAllPost() ([]model.Post, error) {
@@ -58,14 +71,14 @@ func (r *PostRepo) GetAllPost() ([]model.Post, error) {
 		return nil, err
 	}
 	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("user not found")
+		return nil, errors.New("post not found")
 	}
 	return Posts, nil
 }
 
-func (r *PostRepo) UpdatePost(Post *model.Post) (*model.Post, map[string]string) {
+func (r *PostRepo) UpdatePost(post *model.Post) (*model.Post, map[string]string) {
 	dbErr := map[string]string{}
-	err := r.db.Debug().Save(&Post).Error
+	err := r.db.Debug().Save(&post).Error
 	if err != nil {
 		//since our title is unique
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
@@ -76,7 +89,7 @@ func (r *PostRepo) UpdatePost(Post *model.Post) (*model.Post, map[string]string)
 		dbErr["db_error"] = "database error"
 		return nil, dbErr
 	}
-	return Post, nil
+	return post, nil
 }
 
 func (r *PostRepo) DeletePost(id uint64) error {

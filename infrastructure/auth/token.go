@@ -26,7 +26,7 @@ var _ TokenInterface = &Token{}
 
 func (t *Token) CreateToken(userUUID uuid.UUID) (*TokenDetails, error) {
 	td := &TokenDetails{}
-	td.AtExpires = time.Now().Add(time.Minute * 15).Unix()
+	td.AtExpires = time.Now().Add(time.Hour * 15).Unix()
 	newUUID, _ := uuid.NewUUID()
 	td.TokenUuid = newUUID.String()
 
@@ -100,15 +100,15 @@ func (t *Token) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(r.Header)
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
 		accessUuid, ok := claims["access_uuid"].(string)
 		if !ok {
 			return nil, err
 		}
-		userId := fmt.Sprintf("%.f", claims["user_id"])
+		userId := fmt.Sprint(claims["user_id"])
 		userUUID, err := uuid.Parse(userId)
-		//userUUID, err := strconv.ParseUint(fmt.Sprintf("%.f", claims["user_id"]), 10, 64)
 		if err != nil {
 			return nil, err
 		}
@@ -117,5 +117,6 @@ func (t *Token) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 			UserUUID:  userUUID,
 		}, nil
 	}
+	fmt.Println(r.Body)
 	return nil, err
 }

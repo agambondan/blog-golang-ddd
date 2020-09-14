@@ -12,14 +12,18 @@ import (
 //Users struct defines the dependencies that will be used
 type Users struct {
 	us application.UserAppInterface
+	po application.PostAppInterface
+	ro application.RoleAppInterface
 	rd auth.AuthInterface
 	tk auth.TokenInterface
 }
 
 //Users constructor
-func NewUsers(us application.UserAppInterface, rd auth.AuthInterface, tk auth.TokenInterface) *Users {
+func NewUsers(us application.UserAppInterface, po application.PostAppInterface, ro application.RoleAppInterface, rd auth.AuthInterface, tk auth.TokenInterface) *Users {
 	return &Users{
 		us: us,
+		po: po,
+		ro: ro,
 		rd: rd,
 		tk: tk,
 	}
@@ -62,7 +66,6 @@ func (s *Users) GetUsers(c *gin.Context) {
 func (s *Users) GetUser(c *gin.Context) {
 	uuidParam := c.Param("user_id")
 	userUUID, err := uuid.Parse(uuidParam)
-	//userId, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
@@ -72,5 +75,13 @@ func (s *Users) GetUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, user.PublicUser())
+	user.Role = nil
+	posts, err := s.po.GetPostByIdUser(userUUID)
+	po
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	user.Posts = posts
+	c.JSON(http.StatusOK, user)
 }

@@ -3,18 +3,21 @@ package interfaces
 import (
 	"Repository-Pattern/application"
 	"Repository-Pattern/domain/model"
+	"Repository-Pattern/helper"
 	"Repository-Pattern/infrastructure/auth"
 	"Repository-Pattern/interfaces/fileupload"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type Post struct {
-	PostApp    application.PostAppInterface
+	postApp    application.PostAppInterface
 	userApp    application.UserAppInterface
 	fileUpload fileupload.UploadFileInterface
 	tk         auth.TokenInterface
@@ -24,7 +27,7 @@ type Post struct {
 //Post constructor
 func NewPost(fApp application.PostAppInterface, uApp application.UserAppInterface, fd fileupload.UploadFileInterface, rd auth.AuthInterface, tk auth.TokenInterface) *Post {
 	return &Post{
-		PostApp:    fApp,
+		postApp:    fApp,
 		userApp:    uApp,
 		fileUpload: fd,
 		rd:         rd,
@@ -32,15 +35,15 @@ func NewPost(fApp application.PostAppInterface, uApp application.UserAppInterfac
 	}
 }
 
-func (fo *Post) SavePost(c *gin.Context) {
+func (po *Post) SavePost(c *gin.Context) {
 	//check is the user is authenticated first
-	metadata, err := fo.tk.ExtractTokenMetadata(c.Request)
+	metadata, err := po.tk.ExtractTokenMetadata(c.Request)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	//lookup the metadata in redis:
-	userId, err := fo.rd.FetchAuth(metadata.TokenUuid)
+	userId, err := po.rd.FetchAuth(metadata.TokenUuid)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return
@@ -65,46 +68,66 @@ func (fo *Post) SavePost(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, savePostError)
 		return
 	}
-	file, err := c.FormFile("Post_image")
-	if err != nil {
-		savePostError["invalid_file"] = "a valid file is required"
-		c.JSON(http.StatusUnprocessableEntity, savePostError)
-		return
-	}
+
 	//check if the user exist
-	_, err = fo.userApp.GetUser(userId)
+	user, err := po.userApp.GetUser(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, "user not found, unauthorized")
 		return
 	}
-	uploadedFile, err := fo.fileUpload.UploadFile(file)
+	form, err := c.MultipartForm()
 	if err != nil {
-		savePostError["upload_err"] = err.Error() //this error can be any we defined in the UploadFile method
-		c.JSON(http.StatusUnprocessableEntity, savePostError)
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
+	files := form.File["Post_images"]
+	for _, file := range files {
+		basename := filepath.Base(file.Filename)
+		regex := helper.After(basename, ".")
+		if regex == "png" || regex == "jpg" {
+			dir := filepath.Join("./assets/images/", userId.String())
+			if dir != "" {
+				err := os.Mkdir("./assets/images/"+userId.String(), os.ModePerm)
+				if err != nil {
+					fmt.Println(err.Error())
+				}
+			}
+		}
+		filename := filepath.Join("./assets/images/", userId.String(), basename)
+		err := c.SaveUploadedFile(file, filename)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+	}
+	var filenames []string
+	for _, file := range files {
+		filenames = append(filenames, file.Filename)
+	}
+
 	var Post = model.Post{}
 	Post.UserUUID = userId
 	Post.Title = title
 	Post.Description = description
-	Post.PostImage = uploadedFile
-	savedPost, saveErr := fo.PostApp.SavePost(&Post)
+	Post.Author = user
+	Post.PostImage = strings.Join(filenames, "")
+	savedPost, saveErr := po.postApp.SavePost(&Post)
 	if saveErr != nil {
 		c.JSON(http.StatusInternalServerError, saveErr)
 		return
 	}
-	c.JSON(http.StatusCreated, savedPost)
+	c.JSON(http.StatusCreated, gin.H{"data": savedPost, "filenames": filenames})
 }
 
-func (fo *Post) UpdatePost(c *gin.Context) {
+func (po *Post) UpdatePost(c *gin.Context) {
 	//Check if the user is authenticated first
-	metadata, err := fo.tk.ExtractTokenMetadata(c.Request)
+	metadata, err := po.tk.ExtractTokenMetadata(c.Request)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	//lookup the metadata in redis:
-	userId, err := fo.rd.FetchAuth(metadata.TokenUuid)
+	userId, err := po.rd.FetchAuth(metadata.TokenUuid)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return
@@ -132,14 +155,14 @@ func (fo *Post) UpdatePost(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, updatePostError)
 		return
 	}
-	user, err := fo.userApp.GetUser(userId)
+	user, err := po.userApp.GetUser(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, "user not found, unauthorized")
 		return
 	}
 
 	//check if the Post exist:
-	Post, err := fo.PostApp.GetPost(PostId)
+	Post, err := po.postApp.GetPost(PostId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, err.Error())
 		return
@@ -155,7 +178,7 @@ func (fo *Post) UpdatePost(c *gin.Context) {
 	// if nil, we used the old one whose path is saved in the database
 	file, _ := c.FormFile("Post_image")
 	if file != nil {
-		Post.PostImage, err = fo.fileUpload.UploadFile(file)
+		Post.PostImage, err = po.fileUpload.UploadFile(file)
 		//since i am using Digital Ocean(DO) Spaces to save image, i am appending my DO url here. You can comment this line since you may be using Digital Ocean Spaces.
 		Post.PostImage = os.Getenv("DO_SPACES_URL") + Post.PostImage
 		if err != nil {
@@ -169,7 +192,7 @@ func (fo *Post) UpdatePost(c *gin.Context) {
 	Post.Title = title
 	Post.Description = description
 	Post.UpdatedAt = time.Now()
-	updatedPost, dbUpdateErr := fo.PostApp.UpdatePost(Post)
+	updatedPost, dbUpdateErr := po.postApp.UpdatePost(Post)
 	if dbUpdateErr != nil {
 		c.JSON(http.StatusInternalServerError, dbUpdateErr)
 		return
@@ -177,8 +200,8 @@ func (fo *Post) UpdatePost(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedPost)
 }
 
-func (fo *Post) GetAllPost(c *gin.Context) {
-	allPost, err := fo.PostApp.GetAllPost()
+func (po *Post) GetAllPost(c *gin.Context) {
+	allPost, err := po.postApp.GetAllPost()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
@@ -186,46 +209,46 @@ func (fo *Post) GetAllPost(c *gin.Context) {
 	c.JSON(http.StatusOK, allPost)
 }
 
-func (fo *Post) GetPostAndCreator(c *gin.Context) {
-	PostId, err := strconv.ParseUint(c.Param("Post_id"), 10, 64)
+func (po *Post) GetPostAndCreator(c *gin.Context) {
+	postId, err := strconv.ParseUint(c.Param("post_id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, "invalid request")
 		return
 	}
-	Post, err := fo.PostApp.GetPost(PostId)
+	post, err := po.postApp.GetPost(postId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	user, err := fo.userApp.GetUser(Post.UserUUID)
+	user, err := po.userApp.GetUser(post.UserUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	PostAndUser := map[string]interface{}{
-		"Post":    Post,
+	postAndUser := map[string]interface{}{
+		"post":    post,
 		"creator": user.PublicUser(),
 	}
-	c.JSON(http.StatusOK, PostAndUser)
+	c.JSON(http.StatusOK, postAndUser)
 }
 
-func (fo *Post) DeletePost(c *gin.Context) {
-	metadata, err := fo.tk.ExtractTokenMetadata(c.Request)
+func (po *Post) DeletePost(c *gin.Context) {
+	metadata, err := po.tk.ExtractTokenMetadata(c.Request)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	PostId, err := strconv.ParseUint(c.Param("Post_id"), 10, 64)
+	postId, err := strconv.ParseUint(c.Param("Post_id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, "invalid request")
 		return
 	}
-	_, err = fo.userApp.GetUser(metadata.UserUUID)
+	_, err = po.userApp.GetUser(metadata.UserUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	err = fo.PostApp.DeletePost(PostId)
+	err = po.postApp.DeletePost(postId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return

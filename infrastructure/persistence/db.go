@@ -11,6 +11,7 @@ import (
 type Repositories struct {
 	User repositories.UserRepository
 	Post repositories.PostRepository
+	Role repositories.RoleRepository
 	db   *gorm.DB
 }
 
@@ -24,6 +25,8 @@ func NewRepositories(DbDriver, DbUser, DbPassword, DbPort, DbHost, DbName string
 
 	return &Repositories{
 		User: NewUserRepository(db),
+		Post: NewPostRepository(db),
+		Role: NewRoleRepository(db),
 		db:   db,
 	}, nil
 }
@@ -35,5 +38,5 @@ func (s *Repositories) Close() error {
 
 //This migrate all tables
 func (s *Repositories) AutoMigrate() error {
-	return s.db.AutoMigrate(&model.User{}).Error
+	return s.db.AutoMigrate(&model.User{}, &model.Post{}, &model.Role{}).Error
 }

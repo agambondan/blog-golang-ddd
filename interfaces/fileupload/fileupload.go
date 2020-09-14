@@ -35,13 +35,13 @@ func (fu *fileUpload) UploadFile(file *multipart.FileHeader) (string, error) {
 	size := file.Size
 	//The image should not be more than 500KB
 	fmt.Println("the size: ", size)
-	if size > int64(512000) {
+	if size > int64(20000000) {
 		return "", errors.New("sorry, please upload an Image of 500KB or less")
 	}
 	//only the first 512 bytes are used to sniff the content type of a file,
 	//so, so no need to read the entire bytes of a file.
 	buffer := make([]byte, size)
-	f.Read(buffer)
+	_, _ = f.Read(buffer)
 	fileType := http.DetectContentType(buffer)
 	//if the image is valid
 	if !strings.HasPrefix(fileType, "image") {
@@ -52,10 +52,11 @@ func (fu *fileUpload) UploadFile(file *multipart.FileHeader) (string, error) {
 	accessKey := os.Getenv("DO_SPACES_KEY")
 	secKey := os.Getenv("DO_SPACES_SECRET")
 	endpoint := os.Getenv("DO_SPACES_ENDPOINT")
-	ssl := true
+	// ssl in secure true
+	//ssl := true
 
 	// Initiate a client using DigitalOcean Spaces.
-	client, err := minio.New(endpoint, accessKey, secKey, ssl)
+	client, err := minio.New(endpoint, accessKey, secKey, true)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -63,15 +64,14 @@ func (fu *fileUpload) UploadFile(file *multipart.FileHeader) (string, error) {
 	cacheControl := "max-age=31536000"
 	// make it public
 	userMetaData := map[string]string{"x-amz-acl": "public-read"}
-	n, err := client.PutObject("chodapi", filePath, fileBytes, size, minio.PutObjectOptions{ContentType: fileType, CacheControl: cacheControl, UserMetadata: userMetaData})
-	if err != nil {
-		fmt.Println("the error", err)
-		return "", errors.New("something went wrong")
-	}
+	n, err := client.PutObject("images", filePath, fileBytes, size, minio.PutObjectOptions{ContentType: fileType, CacheControl: cacheControl, UserMetadata: userMetaData})
+	//if err != nil {
+	//	fmt.Println("the error", err)
+	//	return "", errors.New("something went wrong")
+	//}
 	fmt.Println("Successfully uploaded bytes: ", n)
 	return filePath, nil
 }
-
 
 //func (fu *fileUpload) UploadFilex(file *multipart.FileHeader) (string, error) {
 //	f, err := file.Open()

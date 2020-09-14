@@ -19,8 +19,8 @@ type User struct {
 	Password    string     `gorm:"size:100;not null;" json:"password"`
 	PhoneNumber string     `gorm:"size:100;not null;" json:"phone_number,omitempty"`
 	Posts       []Post     `json:"posts,omitempty"`
-	Role        Role       `json:"role,omitempty"`
-	RoleId      int        `gorm:"not null;" json:"role_id,omitempty"`
+	Role        *Role       `json:"role,omitempty"`
+	RoleId      uint64     `gorm:"not null;" json:"role_id,omitempty"`
 	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at,omitempty"`
 	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at,omitempty"`
 	DeletedAt   *time.Time `json:"deleted_at,omitempty"`

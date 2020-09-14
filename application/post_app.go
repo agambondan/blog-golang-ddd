@@ -3,38 +3,44 @@ package application
 import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/domain/repositories"
+	"github.com/google/uuid"
 )
 
-type PostApp struct {
-	fr repositories.PostRepository
+type postApp struct {
+	pr repositories.PostRepository
 }
 
-var _ PostAppInterface = &PostApp{}
+var _ PostAppInterface = &postApp{}
 
 type PostAppInterface interface {
 	SavePost(*model.Post) (*model.Post, map[string]string)
 	GetAllPost() ([]model.Post, error)
+	GetPostByIdUser(userUuid uuid.UUID) ([]model.Post, error)
 	GetPost(uint64) (*model.Post, error)
 	UpdatePost(*model.Post) (*model.Post, map[string]string)
 	DeletePost(uint64) error
 }
 
-func (f *PostApp) SavePost(Post *model.Post) (*model.Post, map[string]string) {
-	return f.fr.SavePost(Post)
+func (p *postApp) SavePost(post *model.Post) (*model.Post, map[string]string) {
+	return p.pr.SavePost(post)
 }
 
-func (f *PostApp) GetAllPost() ([]model.Post, error) {
-	return f.fr.GetAllPost()
+func (p *postApp) GetAllPost() ([]model.Post, error) {
+	return p.pr.GetAllPost()
 }
 
-func (f *PostApp) GetPost(PostId uint64) (*model.Post, error) {
-	return f.fr.GetPost(PostId)
+func (p *postApp) GetPostByIdUser(userUuid uuid.UUID) ([]model.Post, error) {
+	return p.pr.GetPostByIdUser(userUuid)
 }
 
-func (f *PostApp) UpdatePost(Post *model.Post) (*model.Post, map[string]string) {
-	return f.fr.UpdatePost(Post)
+func (p *postApp) GetPost(postId uint64) (*model.Post, error) {
+	return p.pr.GetPost(postId)
 }
 
-func (f *PostApp) DeletePost(PostId uint64) error {
-	return f.fr.DeletePost(PostId)
+func (p *postApp) UpdatePost(post *model.Post) (*model.Post, map[string]string) {
+	return p.pr.UpdatePost(post)
+}
+
+func (p *postApp) DeletePost(postId uint64) error {
+	return p.pr.DeletePost(postId)
 }
