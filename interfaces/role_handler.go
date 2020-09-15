@@ -39,9 +39,7 @@ func (ro *Role) SaveRole(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	//We we are using a frontend(vuejs), our errors need to have keys for easy checking, so we use a map to hold our errors
 	var saveRoleError = make(map[string]string)
-
 	name := c.PostForm("name")
 	if fmt.Sprintf("%T", name) != "string" {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -56,7 +54,6 @@ func (ro *Role) SaveRole(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, saveRoleError)
 		return
 	}
-
 	//check if the user exist
 	user, err := ro.userApp.GetUser(userId)
 	if err != nil {
@@ -67,7 +64,6 @@ func (ro *Role) SaveRole(c *gin.Context) {
 	user.Role = role
 	if err != nil || user.RoleId != 1 || user.Role.Name != "admin" {
 		var Role = model.Role{}
-		fmt.Println(user.RoleId, user.Role.Name, " masuk cuk")
 		Role.Name = "admin"
 		_, _ = ro.roleApp.SaveRole(&Role)
 		c.JSON(http.StatusBadRequest, "unauthorized, your not admin")
@@ -76,10 +72,14 @@ func (ro *Role) SaveRole(c *gin.Context) {
 	var Role = model.Role{}
 	Role.Name = name
 	saveRole, saveErr := ro.roleApp.SaveRole(&Role)
-	if saveErr != nil {
-		fmt.Println("masuk cok")
-		c.JSON(http.StatusInternalServerError, saveErr)
-		return
+	for saveError := range saveErr {
+		if saveError == "" {
+			c.JSON(http.StatusInternalServerError, saveErr)
+			return
+		} else {
+			c.JSON(http.StatusInternalServerError, saveErr)
+			return
+		}
 	}
 	c.JSON(http.StatusCreated, saveRole)
 }
@@ -91,6 +91,33 @@ func (ro *Role) GetRole(c *gin.Context) {
 }
 
 func (ro *Role) GetAllRole(c *gin.Context) {
+	//check is the user is authenticated first
+	metadata, err := ro.tk.ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	//lookup the metadata in redis:
+	userId, err := ro.rd.FetchAuth(metadata.TokenUuid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := ro.userApp.GetUser(userId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "user not found")
+		return
+	}
+	if user.RoleId != 1 {
+		c.JSON(http.StatusInternalServerError, "your not admin, unauthorized")
+		return
+	}
+	roles, err := ro.roleApp.GetAllRole()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, roles)
 }
 
 func (ro *Role) DeleteRole(c *gin.Context) {

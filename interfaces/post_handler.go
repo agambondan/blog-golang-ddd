@@ -50,7 +50,6 @@ func (po *Post) SavePost(c *gin.Context) {
 	}
 	//We we are using a frontend(vuejs), our errors need to have keys for easy checking, so we use a map to hold our errors
 	var savePostError = make(map[string]string)
-
 	title := c.PostForm("title")
 	description := c.PostForm("description")
 	if fmt.Sprintf("%T", title) != "string" || fmt.Sprintf("%T", description) != "string" {
@@ -68,32 +67,31 @@ func (po *Post) SavePost(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, savePostError)
 		return
 	}
-
 	//check if the user exist
 	user, err := po.userApp.GetUser(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, "user not found, unauthorized")
 		return
 	}
-	form, err := c.MultipartForm()
+	formPost, err := c.MultipartForm()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
-	files := form.File["Post_images"]
-	for _, file := range files {
+	postImages := formPost.File["post_images"]
+	for _, file := range postImages {
 		basename := filepath.Base(file.Filename)
 		regex := helper.After(basename, ".")
 		if regex == "png" || regex == "jpg" {
-			dir := filepath.Join("./assets/images/", userId.String())
+			dir := filepath.Join("./assets/images/", userId.String(), "/post")
 			if dir != "" {
-				err := os.Mkdir("./assets/images/"+userId.String(), os.ModePerm)
+				err := os.Mkdir("./assets/images/"+userId.String()+"/post", os.ModePerm)
 				if err != nil {
 					fmt.Println(err.Error())
 				}
 			}
 		}
-		filename := filepath.Join("./assets/images/", userId.String(), basename)
+		filename := filepath.Join("./assets/images/", userId.String(), "/post", basename)
 		err := c.SaveUploadedFile(file, filename)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -101,10 +99,9 @@ func (po *Post) SavePost(c *gin.Context) {
 		}
 	}
 	var filenames []string
-	for _, file := range files {
+	for _, file := range postImages {
 		filenames = append(filenames, file.Filename)
 	}
-
 	var Post = model.Post{}
 	Post.UserUUID = userId
 	Post.Title = title
@@ -140,7 +137,7 @@ func (po *Post) UpdatePost(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "invalid request")
 		return
 	}
-	//Since it is a multipart form data we sent, we will do a manual check on each item
+	//Since it is a multipart formPost data we sent, we will do a manual check on each item
 	title := c.PostForm("title")
 	description := c.PostForm("description")
 	if fmt.Sprintf("%T", title) != "string" || fmt.Sprintf("%T", description) != "string" {
@@ -201,12 +198,14 @@ func (po *Post) UpdatePost(c *gin.Context) {
 }
 
 func (po *Post) GetAllPost(c *gin.Context) {
-	allPost, err := po.postApp.GetAllPost()
+	posts := model.Posts{}
+	var err error
+	posts, err = po.postApp.GetAllPost()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, allPost)
+	c.JSON(http.StatusOK, posts.PublicPosts())
 }
 
 func (po *Post) GetPostAndCreator(c *gin.Context) {

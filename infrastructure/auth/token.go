@@ -100,7 +100,6 @@ func (t *Token) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(r.Header)
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
 		accessUuid, ok := claims["access_uuid"].(string)

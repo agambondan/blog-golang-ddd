@@ -65,6 +65,7 @@ func main() {
 	r.POST("/users", users.SaveUser)
 	r.GET("/users", users.GetUsers)
 	r.GET("/users/:user_id", users.GetUser)
+	r.GET("/private/users", users.GetPrivateUsers)
 
 	//role routes
 	r.POST("/role", middlewares.AuthMiddleware(), roles.SaveRole)
