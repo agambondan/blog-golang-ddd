@@ -3,100 +3,120 @@ package persistence
 import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/domain/repositories"
-	"errors"
+	"database/sql"
+	"fmt"
 	"github.com/google/uuid"
-	"github.com/jinzhu/gorm"
-	"os"
-	"strings"
+	"time"
 )
 
 type PostRepo struct {
-	db *gorm.DB
+	db *sql.DB
 }
 
-func NewPostRepository(db *gorm.DB) *PostRepo {
+func NewPostRepository(db *sql.DB) *PostRepo {
 	return &PostRepo{db}
 }
 
 //PostRepo implements the repository.PostRepository interface
 var _ repositories.PostRepository = &PostRepo{}
 
-func (r *PostRepo) SavePost(post *model.Post) (*model.Post, map[string]string) {
-	dbErr := map[string]string{}
-	//The images are uploaded to digital ocean spaces. So we need to prepend the url. This might not be your use case, if you are not uploading image to Digital Ocean.
-	post.PostImage = os.Getenv("DO_SPACES_URL") + post.PostImage
-
-	err := r.db.Debug().Create(&post).Error
+func (r *PostRepo) SavePost(post *model.Post) (*model.Post, error) {
+	post.Prepare()
+	queryInsert := fmt.Sprint("INSERT INTO posts (title, description, post_images, user_id, created_at, updated_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id")
+	prepare, err := r.db.Prepare(queryInsert)
 	if err != nil {
-		//since our title is unique
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
-			dbErr["unique_title"] = "Post title already taken"
-			return nil, dbErr
-		}
-		//any other db error
-		dbErr["db_error"] = "database error"
-		return nil, dbErr
+		return post, err
+	}
+	err = prepare.QueryRow(&post.Title, &post.Description, &post.PostImage, &post.UserUUID, &post.CreatedAt, &post.UpdatedAt, nil).Scan(&post.ID)
+	if err != nil {
+		return post, err
 	}
 	return post, nil
 }
 
 func (r *PostRepo) GetPost(id uint64) (*model.Post, error) {
-	var Post model.Post
-	err := r.db.Debug().Where("id = ?", id).Take(&Post).Error
+	var post model.Post
+	querySelect := fmt.Sprint("SELECT id, title, description, post_images, user_id, created_at, updated_at FROM posts WHERE deleted_at is NULL AND id=$1")
+	prepare, err := r.db.Prepare(querySelect)
 	if err != nil {
-		return nil, errors.New("database error, please try again")
+		return &post, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("post not found")
+	err = prepare.QueryRow(id).Scan(&post.ID, &post.Title, &post.Description, &post.PostImage, &post.UserUUID, &post.CreatedAt, &post.UpdatedAt)
+	if err != nil {
+		return &post, err
 	}
-	return &Post, nil
+	return &post, nil
 }
 
 func (r *PostRepo) GetPostByIdUser(userUuid uuid.UUID) ([]model.Post, error) {
-	var Post []model.Post
-	err := r.db.Debug().Where("user_uuid = ?", userUuid).Find(&Post).Error
+	var posts []model.Post
+	querySelect := fmt.Sprint("SELECT id, title, description, post_images, user_id, created_at, updated_at FROM posts WHERE deleted_at is NULL AND user_id=$1")
+	prepare, err := r.db.Prepare(querySelect)
 	if err != nil {
-		return nil, errors.New("database error, please try again")
+		return posts, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("post not found")
+	rows, err := prepare.Query(userUuid)
+	if err != nil {
+		return posts, err
 	}
-	return Post, nil
+	for rows.Next() {
+		var post model.Post
+		err := rows.Scan(&post.ID, &post.Title, &post.Description, &post.PostImage, &post.UserUUID, &post.CreatedAt, &post.UpdatedAt)
+		if err != nil {
+			return posts, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
 }
 
 func (r *PostRepo) GetAllPost() ([]model.Post, error) {
-	var Posts []model.Post
-	err := r.db.Debug().Limit(100).Order("created_at desc").Find(&Posts).Error
+	var posts []model.Post
+	querySelect := fmt.Sprint("SELECT id, title, description, post_images, user_id, created_at, updated_at FROM posts WHERE deleted_at is NULL")
+	prepare, err := r.db.Prepare(querySelect)
 	if err != nil {
-		return nil, err
+		return posts, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("post not found")
+	rows, err := prepare.Query()
+	if err != nil {
+		return posts, err
 	}
-	return Posts, nil
+	for rows.Next() {
+		var post model.Post
+		err := rows.Scan(&post.ID, &post.Title, &post.Description, &post.PostImage, &post.UserUUID, &post.CreatedAt, &post.UpdatedAt)
+		if err != nil {
+			return posts, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, err
 }
 
-func (r *PostRepo) UpdatePost(post *model.Post) (*model.Post, map[string]string) {
-	dbErr := map[string]string{}
-	err := r.db.Debug().Save(&post).Error
+func (r *PostRepo) UpdatePost(post *model.Post) (*model.Post, error) {
+	post.UpdatedAt = time.Now()
+	queryInsert := fmt.Sprint("UPDATE posts SET title=$1, description=$2, post_images=$3, updated_at=$4 WHERE id=$5")
+	prepare, err := r.db.Prepare(queryInsert)
 	if err != nil {
-		//since our title is unique
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
-			dbErr["unique_title"] = "title already taken"
-			return nil, dbErr
-		}
-		//any other db error
-		dbErr["db_error"] = "database error"
-		return nil, dbErr
+		return post, err
+	}
+	_, err = prepare.Exec(&post.Title, &post.Description, &post.PostImage, &post.CreatedAt, &post.UpdatedAt, nil)
+	if err != nil {
+		return post, err
 	}
 	return post, nil
 }
 
 func (r *PostRepo) DeletePost(id uint64) error {
-	var Post model.Post
-	err := r.db.Debug().Where("id = ?", id).Delete(&Post).Error
+	var post model.Post
+	post.DeletedAt = time.Now()
+	querySoftDelete := fmt.Sprint("UPDATE posts SET deleted_at=$1 WHERE id=$2")
+	prepare, err := r.db.Prepare(querySoftDelete)
 	if err != nil {
-		return errors.New("database error, please try again")
+		return err
+	}
+	_, err = prepare.Exec(post.DeletedAt, id)
+	if err != nil {
+		return err
 	}
 	return nil
 }

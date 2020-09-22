@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
 )
 
 type Role struct {
@@ -71,16 +72,7 @@ func (ro *Role) SaveRole(c *gin.Context) {
 	}
 	var Role = model.Role{}
 	Role.Name = name
-	saveRole, saveErr := ro.roleApp.SaveRole(&Role)
-	for saveError := range saveErr {
-		if saveError == "" {
-			c.JSON(http.StatusInternalServerError, saveErr)
-			return
-		} else {
-			c.JSON(http.StatusInternalServerError, saveErr)
-			return
-		}
-	}
+	saveRole, err := ro.roleApp.SaveRole(&Role)
 	c.JSON(http.StatusCreated, saveRole)
 }
 
@@ -88,6 +80,38 @@ func (ro *Role) UpdateRole(c *gin.Context) {
 }
 
 func (ro *Role) GetRole(c *gin.Context) {
+	roleId, err := strconv.ParseUint(c.Param("role_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "invalid request")
+		return
+	}
+	//check is the user is authenticated first
+	metadata, err := ro.tk.ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	//lookup the metadata in redis:
+	userId, err := ro.rd.FetchAuth(metadata.TokenUuid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := ro.userApp.GetUser(userId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "user not found")
+		return
+	}
+	if user.RoleId != 1 {
+		c.JSON(http.StatusUnauthorized, "your not admin, unauthorized")
+		return
+	}
+	role, err := ro.roleApp.GetRole(roleId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, "")
+		return
+	}
+	c.JSON(http.StatusOK, role)
 }
 
 func (ro *Role) GetAllRole(c *gin.Context) {
@@ -109,7 +133,7 @@ func (ro *Role) GetAllRole(c *gin.Context) {
 		return
 	}
 	if user.RoleId != 1 {
-		c.JSON(http.StatusInternalServerError, "your not admin, unauthorized")
+		c.JSON(http.StatusUnauthorized, "your not admin, unauthorized")
 		return
 	}
 	roles, err := ro.roleApp.GetAllRole()

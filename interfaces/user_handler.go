@@ -36,12 +36,6 @@ func NewUsers(us application.UserAppInterface, po application.PostAppInterface, 
 
 func (s *Users) SaveUser(c *gin.Context) {
 	var user model.User
-	//if err := c.ShouldBindJSON(&user); err != nil {
-	//	c.JSON(http.StatusUnprocessableEntity, gin.H{
-	//		"invalid_json": "invalid json",
-	//	})
-	//	return
-	//}
 	firstName := c.PostForm("first_name")
 	lastName := c.PostForm("last_name")
 	email := c.PostForm("email")
@@ -49,14 +43,22 @@ func (s *Users) SaveUser(c *gin.Context) {
 	username := c.PostForm("username")
 	phoneNumber := c.PostForm("phone_number")
 	roleID := c.PostForm("role_id")
-
-	user.FirstName = firstName
-	user.LastName = lastName
-	user.Email = email
-	user.Password = password
-	user.Username = username
-	user.PhoneNumber = phoneNumber
-	user.RoleId, _ = strconv.ParseUint(roleID, 10, 64)
+	if firstName != "" && lastName != "" && email != "" {
+		user.FirstName = firstName
+		user.LastName = lastName
+		user.Email = email
+		user.Password = password
+		user.Username = username
+		user.PhoneNumber = phoneNumber
+		user.RoleId, _ = strconv.ParseUint(roleID, 10, 64)
+	} else {
+		if err := c.ShouldBindJSON(&user); err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"invalid_json": "invalid json",
+			})
+			return
+		}
+	}
 	//validate the request:
 	validateErr := user.Validate("")
 	if len(validateErr) > 0 {
@@ -82,7 +84,7 @@ func (s *Users) SaveUser(c *gin.Context) {
 			if dir != "" {
 				err := os.Mkdir("./assets/images/"+newUser.UUID.String()+"/user", os.ModePerm)
 				if err != nil {
-					fmt.Println(err.Error())
+					fmt.Println(err)
 					_ = os.Mkdir("./assets/images/"+newUser.UUID.String(), os.ModePerm)
 					_ = os.Mkdir("./assets/images/"+newUser.UUID.String()+"/user", os.ModePerm)
 				}
@@ -91,7 +93,7 @@ func (s *Users) SaveUser(c *gin.Context) {
 		filename := filepath.Join("./assets/images/", newUser.UUID.String(), "/user", basename)
 		err := c.SaveUploadedFile(file, filename)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"message": err})
 			return
 		}
 	}
@@ -99,7 +101,8 @@ func (s *Users) SaveUser(c *gin.Context) {
 	for _, file := range files {
 		filenames = append(filenames, file.Filename)
 	}
-	c.JSON(http.StatusCreated, newUser.PublicUser())
+	c.JSON(http.StatusCreated, gin.H{"data": newUser.PublicUser(),
+		"filenames": filenames})
 }
 
 func (s *Users) GetPrivateUsers(c *gin.Context) {
@@ -126,7 +129,7 @@ func (s *Users) GetPrivateUsers(c *gin.Context) {
 	}
 	users, err := s.us.GetUsers()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, users)
@@ -137,29 +140,53 @@ func (s *Users) GetUsers(c *gin.Context) {
 	var err error
 	users, err = s.us.GetUsers()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, users.PublicUsers())
 }
 
 func (s *Users) GetUser(c *gin.Context) {
+	//check is the user is authenticated first
+	metadata, err := s.tk.ExtractTokenMetadata(c.Request)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	//lookup the metadata in redis:
+	userId, err := s.rd.FetchAuth(metadata.TokenUuid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	userAdmin, err := s.us.GetUser(userId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, "user not found")
+		return
+	}
+	if userAdmin.RoleId != 1 {
+		c.JSON(http.StatusInternalServerError, "your not admin, unauthorized")
+		return
+	}
 	uuidParam := c.Param("user_id")
 	userUUID, err := uuid.Parse(uuidParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
+		c.JSON(http.StatusBadRequest, err)
+		return
+	}
+	if userUUID != userId {
+		c.JSON(http.StatusBadRequest, "this token not match with your account")
 		return
 	}
 	user, err := s.us.GetUser(userUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 	user.Role = nil
 	posts, err := s.po.GetPostByIdUser(userUUID)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 	user.Posts = posts

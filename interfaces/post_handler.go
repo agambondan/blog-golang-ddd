@@ -17,21 +17,25 @@ import (
 )
 
 type Post struct {
-	postApp    application.PostAppInterface
-	userApp    application.UserAppInterface
-	fileUpload fileupload.UploadFileInterface
-	tk         auth.TokenInterface
-	rd         auth.AuthInterface
+	postApp         application.PostAppInterface
+	userApp         application.UserAppInterface
+	postLabelApp    application.PostLabelAppInterface
+	postCategoryApp application.PostCategoryAppInterface
+	fileUpload      fileupload.UploadFileInterface
+	tk              auth.TokenInterface
+	rd              auth.AuthInterface
 }
 
 //Post constructor
-func NewPost(fApp application.PostAppInterface, uApp application.UserAppInterface, fd fileupload.UploadFileInterface, rd auth.AuthInterface, tk auth.TokenInterface) *Post {
+func NewPost(fApp application.PostAppInterface, uApp application.UserAppInterface, lApp application.PostLabelAppInterface, cApp application.PostCategoryAppInterface, fd fileupload.UploadFileInterface, rd auth.AuthInterface, tk auth.TokenInterface) *Post {
 	return &Post{
-		postApp:    fApp,
-		userApp:    uApp,
-		fileUpload: fd,
-		rd:         rd,
-		tk:         tk,
+		postApp:         fApp,
+		userApp:         uApp,
+		postLabelApp:    lApp,
+		postCategoryApp: cApp,
+		fileUpload:      fd,
+		rd:              rd,
+		tk:              tk,
 	}
 }
 
@@ -52,6 +56,15 @@ func (po *Post) SavePost(c *gin.Context) {
 	var savePostError = make(map[string]string)
 	title := c.PostForm("title")
 	description := c.PostForm("description")
+	labelArray := c.PostFormArray("labels")
+	categoryArray := c.PostFormArray("categories")
+	label := model.Label{}
+	category := model.Category{}
+	//var categories []model.Category
+	//var labels []model.Label
+	//for key, value := range c.Request.PostForm {
+	//	fmt.Println(key, value)
+	//}
 	if fmt.Sprintf("%T", title) != "string" || fmt.Sprintf("%T", description) != "string" {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
 			"invalid_json": "Invalid json",
@@ -88,6 +101,8 @@ func (po *Post) SavePost(c *gin.Context) {
 				err := os.Mkdir("./assets/images/"+userId.String()+"/post", os.ModePerm)
 				if err != nil {
 					fmt.Println(err.Error())
+					_ = os.Mkdir("./assets/images/"+userId.String(), os.ModePerm)
+					_ = os.Mkdir("./assets/images/"+userId.String()+"/post", os.ModePerm)
 				}
 			}
 		}
@@ -108,6 +123,14 @@ func (po *Post) SavePost(c *gin.Context) {
 	Post.Description = description
 	Post.Author = user
 	Post.PostImage = strings.Join(filenames, "")
+	for i := 0; i < len(labelArray); i++ {
+		label.Name = labelArray[i]
+		//labels = append(labels, label)
+	}
+	for j := 0; j < len(categoryArray); j++ {
+		category.Name = categoryArray[j]
+		//categories = append(categories, category)
+	}
 	savedPost, saveErr := po.postApp.SavePost(&Post)
 	if saveErr != nil {
 		c.JSON(http.StatusInternalServerError, saveErr)

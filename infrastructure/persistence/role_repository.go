@@ -3,83 +3,92 @@ package persistence
 import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/domain/repositories"
-	"errors"
-	"github.com/jinzhu/gorm"
-	"strings"
+	"database/sql"
+	"fmt"
+	"time"
 )
 
 type RoleRepo struct {
-	db *gorm.DB
+	db *sql.DB
 }
 
-func NewRoleRepository(db *gorm.DB) *RoleRepo {
+func NewRoleRepository(db *sql.DB) *RoleRepo {
 	return &RoleRepo{db}
 }
 
 //RoleRepo implements the repository.RoleRepository interface
 var _ repositories.RoleRepository = &RoleRepo{}
 
-func (r *RoleRepo) SaveRole(role *model.Role) (*model.Role, map[string]string) {
-	dbErr := map[string]string{}
-	err := r.db.Debug().Create(&role).Error
+func (r *RoleRepo) SaveRole(role *model.Role) (*model.Role, error) {
+	role.Prepare()
+	queryInsert := fmt.Sprintf("INSERT INTO %s (name, created_at, updated_at, deleted_at) "+
+		"VALUES ($1, $2, $3, $4) RETURNING id", "roles")
+	prepare, err := r.db.Prepare(queryInsert)
 	if err != nil {
-		//since our title is unique
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
-			dbErr["unique_title"] = "Role title already taken"
-			return nil, dbErr
-		}
-		//any other db error
-		dbErr["db_error"] = "database error"
-		return nil, dbErr
+		return role, err
 	}
-	return role, dbErr
+	err = prepare.QueryRow(&role.Name, &role.CreatedAt, &role.UpdatedAt, nil).Scan(&role.ID)
+	if err != nil {
+		return role, err
+	}
+	return role, err
 }
 
 func (r *RoleRepo) GetRole(id uint64) (*model.Role, error) {
-	var Role model.Role
-	err := r.db.Debug().Where("id = ?", id).Take(&Role).Error
+	var role model.Role
+	querySelect := fmt.Sprint("SELECT id, name, created_at, updated_at FROM roles WHERE deleted_at IS NULL AND id=$1")
+	prepare, err := r.db.Prepare(querySelect)
 	if err != nil {
-		return nil, errors.New("database error, please try again")
+		return &role, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("role not found")
+	err = prepare.QueryRow(id).Scan(&role.ID, &role.Name, &role.CreatedAt, &role.UpdatedAt)
+	if err != nil {
+		fmt.Println(err)
 	}
-	return &Role, nil
+	return &role, nil
 }
 
 func (r *RoleRepo) GetAllRole() ([]model.Role, error) {
-	var Roles []model.Role
-	err := r.db.Debug().Limit(100).Order("created_at desc").Find(&Roles).Error
+	var roles []model.Role
+	queryGetUsers := fmt.Sprintf("SELECT id, name, created_at, updated_at FROM roles WHERE deleted_at IS NULL")
+	rows, err := r.db.Query(queryGetUsers)
 	if err != nil {
-		return nil, err
+		return roles, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("role not found")
+	for rows.Next() {
+		var role model.Role
+		err := rows.Scan(&role.ID, &role.Name, &role.CreatedAt, &role.UpdatedAt)
+		if err != nil {
+			return roles, err
+		}
+		roles = append(roles, role)
 	}
-	return Roles, nil
+	defer rows.Close()
+	return roles, nil
 }
 
-func (r *RoleRepo) UpdateRole(role *model.Role) (*model.Role, map[string]string) {
-	dbErr := map[string]string{}
-	err := r.db.Debug().Save(&role).Error
+func (r *RoleRepo) UpdateRole(role *model.Role) (*model.Role, error) {
+	role.UpdatedAt = time.Now()
+	queryUpdate := fmt.Sprint("UPDATE roles SET name=$1, updated_at=$2 WHERE id=$3")
+	prepare, err := r.db.Prepare(queryUpdate)
 	if err != nil {
-		//since our title is unique
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
-			dbErr["unique_title"] = "title already taken"
-			return nil, dbErr
-		}
-		//any other db error
-		dbErr["db_error"] = "database error"
-		return nil, dbErr
+		return role, err
 	}
-	return role, nil
+	_, err = prepare.Exec(role.Name, role.UpdatedAt, role.ID)
+	return role, err
 }
 
 func (r *RoleRepo) DeleteRole(id uint64) error {
-	var Role model.Role
-	err := r.db.Debug().Where("id = ?", id).Delete(&Role).Error
+	var role model.Role
+	role.DeletedAt = time.Now()
+	querySoftDelete := fmt.Sprint("UPDATE roles SET deleted_at=$1 WHERE id=$2")
+	prepare, err := r.db.Prepare(querySoftDelete)
 	if err != nil {
-		return errors.New("database error, please try again")
+		return err
+	}
+	_, err = prepare.Exec(role.DeletedAt, id)
+	if err != nil {
+		return err
 	}
 	return nil
 }

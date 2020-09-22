@@ -8,23 +8,26 @@ import (
 )
 
 type Post struct {
-	ID          uint64     `gorm:"primary_key;auto_increment" json:"id"`
-	UserUUID    uuid.UUID  `gorm:"type:uuid;not null;" json:"user_id"`
-	Title       string     `gorm:"size:100;not null;unique" json:"title"`
-	Description string     `gorm:"text;not null;" json:"description"`
-	PostImage   string     `gorm:"size:255;null;" json:"Post_image"`
+	ID          uint64     `json:"id"`
+	UserUUID    uuid.UUID  `json:"user_id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	PostImage   string     `json:"post_image"`
 	Author      *User      `json:"author,omitempty"`
-	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
-	DeletedAt   *time.Time `sql:"index" json:"deleted_at,omitempty"`
+	Labels      []Label    `json:"labels,omitempty"`
+	Categories  []Category `json:"categories,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	DeletedAt   time.Time  `sql:"index" json:"deleted_at,omitempty"`
 }
 
 type PublicPost struct {
-	Title       string     `gorm:"size:100;not null;unique" json:"title"`
-	Description string     `gorm:"text;not null;" json:"description"`
-	PostImage   string     `gorm:"size:255;null;" json:"Post_image"`
-	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
+	ID          uint64    `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	PostImage   string    `json:"post_image"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Posts []Post
@@ -40,27 +43,25 @@ func (posts Posts) PublicPosts() []interface{} {
 
 func (p *Post) PublicPost() interface{} {
 	return &PublicPost{
-		Title : p.Title,
+		ID:          p.ID,
+		Title:       p.Title,
 		Description: p.Description,
-		PostImage: p.PostImage,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		PostImage:   p.PostImage,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
 	}
-}
-
-func (p *Post) BeforeSave() {
-	p.Title = html.EscapeString(strings.TrimSpace(p.Title))
 }
 
 func (p *Post) Prepare() {
 	p.Title = html.EscapeString(strings.TrimSpace(p.Title))
+	p.Description = html.EscapeString(strings.TrimSpace(p.Description))
+	p.PostImage = html.EscapeString(strings.TrimSpace(p.PostImage))
 	p.CreatedAt = time.Now()
 	p.UpdatedAt = time.Now()
 }
 
 func (p *Post) Validate(action string) map[string]string {
 	var errorMessages = make(map[string]string)
-
 	switch strings.ToLower(action) {
 	case "update":
 		if p.Title == "" || p.Title == "null" {

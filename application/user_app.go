@@ -14,13 +14,13 @@ type userApp struct {
 var _ UserAppInterface = &userApp{}
 
 type UserAppInterface interface {
-	SaveUser(*model.User) (*model.User, map[string]string)
+	SaveUser(*model.User) (*model.User, error)
 	GetUsers() ([]model.User, error)
 	GetUser(uuid uuid.UUID) (*model.User, error)
-	GetUserByEmailAndPassword(*model.User) (*model.User, map[string]string)
+	GetUserByEmailAndPassword(*model.User) (*model.User, error)
 }
 
-func (u *userApp) SaveUser(user *model.User) (*model.User, map[string]string) {
+func (u *userApp) SaveUser(user *model.User) (*model.User, error) {
 	return u.us.SaveUser(user)
 }
 
@@ -32,6 +32,6 @@ func (u *userApp) GetUsers() ([]model.User, error) {
 	return u.us.GetUsers()
 }
 
-func (u *userApp) GetUserByEmailAndPassword(user *model.User) (*model.User, map[string]string) {
+func (u *userApp) GetUserByEmailAndPassword(user *model.User) (*model.User, error) {
 	return u.us.GetUserByEmailAndPassword(user)
 }

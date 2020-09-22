@@ -6,8 +6,8 @@ import (
 )
 
 type UserRepository interface {
-	SaveUser(*model.User) (*model.User, map[string]string)
+	SaveUser(*model.User) (*model.User, error)
 	GetUser(uuid uuid.UUID) (*model.User, error)
 	GetUsers() ([]model.User, error)
-	GetUserByEmailAndPassword(*model.User) (*model.User, map[string]string)
+	GetUserByEmailAndPassword(*model.User) (*model.User, error)
 }

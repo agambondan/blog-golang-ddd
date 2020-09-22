@@ -3,81 +3,77 @@ package persistence
 import (
 	"Repository-Pattern/domain/model"
 	"Repository-Pattern/domain/repositories"
-	"Repository-Pattern/infrastructure/security"
-	"errors"
+	"database/sql"
+	"fmt"
 	"github.com/google/uuid"
-	"github.com/jinzhu/gorm"
-	"golang.org/x/crypto/bcrypt"
-	"strings"
 )
 
 type UserRepo struct {
-	db *gorm.DB
+	db *sql.DB
 }
 
-func NewUserRepository(db *gorm.DB) *UserRepo {
+func NewUserRepository(db *sql.DB) *UserRepo {
 	return &UserRepo{db}
 }
+
 //UserRepo implements the repository.UserRepository interface
 var _ repositories.UserRepository = &UserRepo{}
 
-func (r *UserRepo) SaveUser(user *model.User) (*model.User, map[string]string) {
-	dbErr := map[string]string{}
-	err := r.db.Debug().Create(&user).Error
+func (r *UserRepo) SaveUser(user *model.User) (*model.User, error) {
+	user.Prepare()
+	queryInsert := fmt.Sprintf("INSERT INTO %s (id, first_name, last_name, email, phone_number, username, password, role_id, created_at, updated_at, deleted_at) "+
+		"VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", "users")
+	stmt, err := r.db.Prepare(queryInsert)
 	if err != nil {
-		//If the email is already taken
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Duplicate") {
-			dbErr["email_taken"] = "email already taken"
-			return nil, dbErr
-		}
-		//any other db error
-		dbErr["db_error"] = "database error"
-		return nil, dbErr
+		return user, err
 	}
-	return user, nil
+	_, err = stmt.Exec(user.UUID, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Username, user.Password, user.RoleId, user.CreatedAt, user.UpdatedAt, nil)
+	if err != nil {
+		return user, err
+	}
+	return user, err
 }
 
 func (r *UserRepo) GetUser(id uuid.UUID) (*model.User, error) {
 	var user model.User
-	err := r.db.Debug().Where("uuid = ?", id).Take(&user).Error
+	querySelect := fmt.Sprint("SELECT id, first_name, last_name, email, phone_number, username, password, role_id, created_at, updated_at FROM users WHERE id=$1 AND deleted_at IS NULL")
+	prepare, err := r.db.Prepare(querySelect)
 	if err != nil {
-		return nil, err
+		return &user, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("user not found")
+	err = prepare.QueryRow(id).Scan(&user.UUID, &user.FirstName, &user.LastName, &user.Email, &user.PhoneNumber, &user.Username, &user.Password, &user.RoleId, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		return &user, err
 	}
 	return &user, nil
 }
 
 func (r *UserRepo) GetUsers() ([]model.User, error) {
 	var users []model.User
-	err := r.db.Debug().Find(&users).Error
+	queryGetUsers := fmt.Sprintf("SELECT id, first_name, last_name, email, phone_number, username, password, role_id, created_at, updated_at FROM users WHERE deleted_at IS NULL")
+	rows, err := r.db.Query(queryGetUsers)
 	if err != nil {
-		return nil, err
+		return users, err
 	}
-	if gorm.IsRecordNotFoundError(err) {
-		return nil, errors.New("user not found")
+	for rows.Next() {
+		var user model.User
+		err := rows.Scan(&user.UUID, &user.FirstName, &user.LastName, &user.Email, &user.PhoneNumber, &user.Username, &user.Password, &user.RoleId, &user.CreatedAt, &user.UpdatedAt)
+		if err != nil {
+			return users, err
+		}
+		users = append(users, user)
 	}
+	defer rows.Close()
 	return users, nil
 }
 
-func (r *UserRepo) GetUserByEmailAndPassword(u *model.User) (*model.User, map[string]string) {
+func (r *UserRepo) GetUserByEmailAndPassword(u *model.User) (*model.User, error) {
 	var user model.User
-	dbErr := map[string]string{}
-	err := r.db.Debug().Where("email = ?", u.Email).Take(&user).Error
-	if gorm.IsRecordNotFoundError(err) {
-		dbErr["no_user"] = "user not found"
-		return nil, dbErr
-	}
+	queryLogin := fmt.Sprint("SELECT id, first_name, last_name, email, phone_number, username, password, role_id, created_at, updated_at "+
+		"FROM users WHERE email=$1 AND password=$2 AND deleted_at IS NULL")
+	err := r.db.QueryRow(queryLogin, u.Email, u.Password).Scan(&user.UUID, &user.FirstName, &user.LastName, &user.Email, &user.PhoneNumber, &user.Username, &user.Password, &user.RoleId, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
-		dbErr["db_error"] = "database error"
-		return nil, dbErr
-	}
-	//Verify the password
-	err = security.VerifyPassword(user.Password, u.Password)
-	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword {
-		dbErr["incorrect_password"] = "incorrect password"
-		return nil, dbErr
+		return &user, err
 	}
 	return &user, nil
 }

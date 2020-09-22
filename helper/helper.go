@@ -20,7 +20,8 @@ func After(value string, a string) string {
 
 func FailOnError(c *gin.Context, httpStatus int, err error) {
 	if err != nil {
-		c.JSON(httpStatus, gin.H{"message": err.Error()})
+		c.JSON(httpStatus, err)
+		return
 	}
 }
 

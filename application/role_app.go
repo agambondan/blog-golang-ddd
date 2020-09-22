@@ -12,14 +12,14 @@ type roleApp struct {
 var _ RoleAppInterface = &roleApp{}
 
 type RoleAppInterface interface {
-	SaveRole(*model.Role) (*model.Role, map[string]string)
+	SaveRole(*model.Role) (*model.Role, error)
 	GetAllRole() ([]model.Role, error)
 	GetRole(uint64) (*model.Role, error)
-	UpdateRole(*model.Role) (*model.Role, map[string]string)
+	UpdateRole(*model.Role) (*model.Role, error)
 	DeleteRole(uint64) error
 }
 
-func (r *roleApp) SaveRole(role *model.Role) (*model.Role, map[string]string) {
+func (r *roleApp) SaveRole(role *model.Role) (*model.Role, error) {
 	return r.rr.SaveRole(role)
 }
 
@@ -31,7 +31,7 @@ func (r *roleApp) GetRole(roleId uint64) (*model.Role, error) {
 	return r.rr.GetRole(roleId)
 }
 
-func (r *roleApp) UpdateRole(role *model.Role) (*model.Role, map[string]string) {
+func (r *roleApp) UpdateRole(role *model.Role) (*model.Role, error) {
 	return r.rr.UpdateRole(role)
 }
 

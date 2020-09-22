@@ -37,7 +37,11 @@ func main() {
 		panic(err)
 	}
 	defer services.Close()
-	err = services.AutoMigrate()
+	err = services.Seeder()
+	if err != nil {
+		panic(err)
+	}
+	err = services.AddForeignKey()
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +55,9 @@ func main() {
 	fd := fileupload.NewFileUpload()
 
 	users := interfaces.NewUsers(services.User, services.Post, services.Role, redisService.Auth, tk)
-	posts := interfaces.NewPost(services.Post, services.User, fd, redisService.Auth, tk)
+	posts := interfaces.NewPost(services.Post, services.User, services.PostLabel, services.PostCategory, fd, redisService.Auth, tk)
+	labels := interfaces.NewLabel(services.Label, services.Role, services.User, redisService.Auth, tk)
+	categories := interfaces.NewCategory(services.Category, services.Role, services.User, redisService.Auth, tk)
 	roles := interfaces.NewRole(services.Role, services.User, redisService.Auth, tk)
 	authenticate := interfaces.NewAuthenticate(services.User, redisService.Auth, tk)
 
@@ -62,24 +68,38 @@ func main() {
 	r.GET("/", home)
 
 	//user routes
-	r.POST("/users", users.SaveUser)
+	r.POST("/users", middlewares.MaxSizeAllowed(8192000), users.SaveUser)
 	r.GET("/users", users.GetUsers)
 	r.GET("/users/:user_id", users.GetUser)
-	r.GET("/private/users", users.GetPrivateUsers)
+	r.GET("/private/users", middlewares.AuthMiddleware(), users.GetPrivateUsers)
 
 	//role routes
 	r.POST("/role", middlewares.AuthMiddleware(), roles.SaveRole)
 	r.PUT("/role/:role_id", middlewares.AuthMiddleware(), roles.UpdateRole)
 	r.GET("/role/:role_id", roles.GetRole)
 	r.DELETE("/role/:role_id", middlewares.AuthMiddleware(), roles.DeleteRole)
-	r.GET("/role", roles.GetAllRole)
+	r.GET("/roles", roles.GetAllRole)
+
+	//label routes
+	r.POST("/label", middlewares.AuthMiddleware(), labels.SaveLabel)
+	r.PUT("/label/:label_id", middlewares.AuthMiddleware(), labels.UpdateLabel)
+	r.GET("/label/:label_id", labels.GetLabel)
+	r.DELETE("/label/:label_id", middlewares.AuthMiddleware(), labels.DeleteLabel)
+	r.GET("/labels", labels.GetAllLabel)
+
+	//category routes
+	r.POST("/category", middlewares.AuthMiddleware(), categories.SaveCategory)
+	r.PUT("/category/:category_id", middlewares.AuthMiddleware(), categories.UpdateCategory)
+	r.GET("/category/:category_id", categories.GetCategory)
+	r.DELETE("/category/:category_id", middlewares.AuthMiddleware(), categories.DeleteCategory)
+	r.GET("/categories", categories.GetAllCategory)
 
 	//post routes
 	r.POST("/post", middlewares.AuthMiddleware(), middlewares.MaxSizeAllowed(8192000), posts.SavePost)
 	r.PUT("/post/:post_id", middlewares.AuthMiddleware(), middlewares.MaxSizeAllowed(8192000), posts.UpdatePost)
-	r.GET("/post/:post_id", posts.GetPostAndCreator)
+	r.GET("/post/:post_id", middlewares.AuthMiddleware(), posts.GetPostAndCreator)
 	r.DELETE("/post/:post_id", middlewares.AuthMiddleware(), posts.DeletePost)
-	r.GET("/post", posts.GetAllPost)
+	r.GET("/posts", posts.GetAllPost)
 
 	//authentication routes
 	r.POST("/login", authenticate.Login)

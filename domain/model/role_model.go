@@ -7,15 +7,11 @@ import (
 )
 
 type Role struct {
-	ID        uint64     `gorm:"primary_key;auto_increment" json:"id"`
-	Name      string     `gorm:"size:100;not null;unique" json:"name"`
-	CreatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
-	DeletedAt *time.Time `sql:"index" json:"deleted_at,omitempty"`
-}
-
-func (r *Role) BeforeSave() {
-	r.Name = html.EscapeString(strings.TrimSpace(r.Name))
+	ID        uint64    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	DeletedAt time.Time `sql:"index" json:"deleted_at,omitempty"`
 }
 
 func (r *Role) Prepare() {

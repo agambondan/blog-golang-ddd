@@ -1,53 +1,32 @@
 package model
 
 import (
-	"Repository-Pattern/infrastructure/security"
 	"github.com/badoux/checkmail"
 	"github.com/google/uuid"
-	"github.com/jinzhu/gorm"
 	"html"
 	"strings"
 	"time"
 )
 
 type User struct {
-	UUID        uuid.UUID  `gorm:"type:uuid;primary_key;" json:"id"`
-	FirstName   string     `gorm:"size:100;not null;" json:"first_name"`
-	LastName    string     `gorm:"size:100;not null;" json:"last_name"`
-	Email       string     `gorm:"size:100;not null;unique" json:"email"`
-	Username    string     `gorm:"size:100;not null;" json:"username,omitempty"`
-	Password    string     `gorm:"size:100;not null;" json:"password"`
-	PhoneNumber string     `gorm:"size:100;not null;" json:"phone_number,omitempty"`
-	Posts       []Post     `json:"posts,omitempty"`
-	Role        *Role      `json:"role,omitempty"`
-	RoleId      uint64     `gorm:"not null;" json:"role_id,omitempty"`
-	CreatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"created_at,omitempty"`
-	UpdatedAt   time.Time  `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at,omitempty"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	UUID        uuid.UUID `sql:"primary_key" json:"id"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	Email       string    `json:"email"`
+	PhoneNumber string    `json:"phone_number,omitempty"`
+	Username    string    `json:"username,omitempty"`
+	Password    string    `json:"password,omitempty"`
+	RoleId      uint64    `json:"role_id,omitempty"`
+	Posts       []Post    `json:"posts,omitempty"`
+	Role        *Role     `json:"role,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	DeletedAt   time.Time `sql:"index" json:"deleted_at,omitempty"`
 }
 
 type PublicUser struct {
-	FirstName string    `gorm:"size:100;not null;" json:"first_name"`
-	LastName  string    `gorm:"size:100;not null;" json:"last_name"`
-}
-
-// BeforeCreate will set a UUID rather than numeric ID.
-func (u *User) BeforeCreate(scope *gorm.Scope) error {
-	uuidV4, err := uuid.NewUUID()
-	if err != nil {
-		return err
-	}
-	return scope.SetColumn("uuid", uuidV4)
-}
-
-//BeforeSave is a gorm hook
-func (u *User) BeforeSave() error {
-	hashPassword, err := security.Hash(u.Password)
-	if err != nil {
-		return err
-	}
-	u.Password = string(hashPassword)
-	return nil
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 type Users []User
@@ -70,9 +49,13 @@ func (u *User) PublicUser() interface{} {
 }
 
 func (u *User) Prepare() {
+	u.UUID, _ = uuid.NewUUID()
 	u.FirstName = html.EscapeString(strings.TrimSpace(u.FirstName))
 	u.LastName = html.EscapeString(strings.TrimSpace(u.LastName))
 	u.Email = html.EscapeString(strings.TrimSpace(u.Email))
+	u.PhoneNumber = html.EscapeString(strings.TrimSpace(u.PhoneNumber))
+	u.Username = html.EscapeString(strings.TrimSpace(u.Username))
+	u.Password = html.EscapeString(strings.TrimSpace(u.Password))
 	u.CreatedAt = time.Now()
 	u.UpdatedAt = time.Now()
 }
